@@ -117,10 +117,21 @@ def main():
         trend_fig = temporal.plot_accident_trends()
         st.plotly_chart(trend_fig)
         
-        # Hourly patterns
-        st.subheader("Hourly Patterns")
-        hourly_fig = temporal.plot_hourly_patterns()
+        # Seasonal patterns
+        st.subheader("Seasonal Patterns")
+        seasonal_fig = temporal.plot_seasonal_patterns()
+        st.plotly_chart(seasonal_fig)
+        
+        # Hourly distribution
+        st.subheader("Hourly Distribution")
+        hourly_fig = temporal.plot_hourly_distribution()
         st.plotly_chart(hourly_fig)
+        
+        # Future predictions
+        st.subheader("Future Trend Prediction")
+        days = st.slider("Number of days to forecast", 7, 90, 30)
+        forecast_fig = temporal.predict_future_trend(days=days)
+        st.plotly_chart(forecast_fig)
         
     elif page == "Predictive Models":
         ml = MLModels(data)
