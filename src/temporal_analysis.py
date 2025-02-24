@@ -1,8 +1,9 @@
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from prophet import Prophet
 import numpy as np
+from statsmodels.tsa.seasonal import seasonal_decompose
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
 class TemporalAnalyzer:
     def __init__(self, data):
@@ -13,19 +14,36 @@ class TemporalAnalyzer:
         Plot accident trends over time.
         """
         daily_counts = self.data.groupby('date').size().reset_index(name='count')
+        daily_counts.set_index('date', inplace=True)
         
-        fig = px.line(
-            daily_counts,
-            x='date',
-            y='count',
-            title='Daily Accident Counts Over Time'
-        )
+        # Perform time series decomposition
+        decomposition = seasonal_decompose(daily_counts['count'], period=7, model='additive')
+        
+        fig = go.Figure()
+        
+        # Original data
+        fig.add_trace(go.Scatter(
+            x=daily_counts.index,
+            y=daily_counts['count'],
+            name='Original',
+            line=dict(color='blue')
+        ))
+        
+        # Trend
+        fig.add_trace(go.Scatter(
+            x=daily_counts.index,
+            y=decomposition.trend,
+            name='Trend',
+            line=dict(color='red')
+        ))
         
         fig.update_layout(
+            title='Daily Accident Counts Over Time with Trend',
             xaxis_title='Date',
             yaxis_title='Number of Accidents',
             width=800,
-            height=500
+            height=500,
+            showlegend=True
         )
         
         return fig
@@ -36,10 +54,12 @@ class TemporalAnalyzer:
         """
         # Group by month and calculate average accidents
         monthly_avg = self.data.groupby('month').size().reset_index(name='count')
-        monthly_avg['month'] = pd.to_datetime(monthly_avg['month'], format='%m').dt.strftime('%B')
+        month_names = ['January', 'February', 'March', 'April', 'May', 'June',
+                      'July', 'August', 'September', 'October', 'November', 'December']
+        monthly_avg['month_name'] = monthly_avg['month'].map(lambda x: month_names[x-1])
         
         fig = go.Figure(data=go.Bar(
-            x=monthly_avg['month'],
+            x=monthly_avg['month_name'],
             y=monthly_avg['count'],
             marker_color='darkred'
         ))
@@ -54,43 +74,72 @@ class TemporalAnalyzer:
         
         return fig
     
-    def forecast_accidents(self, periods=30):
+    def plot_hourly_distribution(self):
         """
-        Forecast future accident counts using Prophet.
+        Plot hourly distribution of accidents.
         """
-        # Prepare data for Prophet
-        daily_counts = self.data.groupby('date').size().reset_index(name='y')
-        daily_counts = daily_counts.rename(columns={'date': 'ds'})
+        hourly_counts = self.data.groupby('hour').size().reset_index(name='count')
         
-        # Create and fit Prophet model
-        model = Prophet(yearly_seasonality=True, weekly_seasonality=True)
-        model.fit(daily_counts)
-        
-        # Make future predictions
-        future_dates = model.make_future_dataframe(periods=periods)
-        forecast = model.predict(future_dates)
-        
-        return forecast
-    
-    def plot_hourly_patterns(self):
-        """
-        Plot hourly patterns in accident occurrence.
-        """
-        hourly_avg = self.data.groupby(['hour', 'is_weekend']).size().reset_index(name='count')
-        
-        fig = px.line(
-            hourly_avg,
-            x='hour',
-            y='count',
-            color='is_weekend',
-            title='Hourly Accident Patterns (Weekday vs Weekend)'
-        )
+        fig = go.Figure(data=go.Bar(
+            x=hourly_counts['hour'],
+            y=hourly_counts['count'],
+            marker_color='darkblue'
+        ))
         
         fig.update_layout(
-            xaxis_title='Hour of Day',
+            title='Accidents by Hour of Day',
+            xaxis_title='Hour',
             yaxis_title='Number of Accidents',
             width=800,
             height=500
+        )
+        
+        return fig
+    
+    def predict_future_trend(self, days=30):
+        """
+        Predict future accident trends using Holt-Winters method.
+        """
+        daily_counts = self.data.groupby('date').size().reset_index(name='count')
+        daily_counts.set_index('date', inplace=True)
+        
+        # Fit Holt-Winters model
+        model = ExponentialSmoothing(
+            daily_counts['count'],
+            seasonal_periods=7,
+            trend='add',
+            seasonal='add'
+        ).fit()
+        
+        # Make predictions
+        forecast = model.forecast(days)
+        
+        # Create plot
+        fig = go.Figure()
+        
+        # Historical data
+        fig.add_trace(go.Scatter(
+            x=daily_counts.index,
+            y=daily_counts['count'],
+            name='Historical',
+            line=dict(color='blue')
+        ))
+        
+        # Predictions
+        fig.add_trace(go.Scatter(
+            x=forecast.index,
+            y=forecast.values,
+            name='Forecast',
+            line=dict(color='red', dash='dash')
+        ))
+        
+        fig.update_layout(
+            title=f'Accident Trend Forecast (Next {days} Days)',
+            xaxis_title='Date',
+            yaxis_title='Number of Accidents',
+            width=800,
+            height=500,
+            showlegend=True
         )
         
         return fig
