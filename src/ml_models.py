@@ -205,3 +205,4 @@ class MLModels:
         
         # Return average daily prediction
         return sum(predictions) / len(predictions)
+
